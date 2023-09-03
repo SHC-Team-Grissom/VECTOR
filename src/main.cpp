@@ -16,6 +16,21 @@ Adafruit_BMP3XX bmp;
 // create a pixel strand with 1 pixel on PIN_NEOPIXEL
 Adafruit_NeoPixel pixels(1, PIN_NEOPIXEL);
 
+// set software states
+enum FlightState
+{
+  STARTUP,
+  IDLE,
+  ASCENT,
+  RCS_GO,
+  RCS_LOCK,
+  ANOMALY_DETECTED,
+  RECOVERY,
+  SHUTDOWN
+};
+
+FlightState SW_STATE = STARTUP;
+
 // set default vars
 float altitude = 0;
 float pressure = 0;
@@ -23,7 +38,6 @@ float pressure = 0;
 char TEAM_ID[] = "Grissom";
 char MISSION_TIME[12];
 long PACKET_COUNT = 0;
-char SW_STATE[] = "Idle";
 char CAM_STATE[] = "Idle";
 long ACC_X = 0;
 long ACC_Y = 0;
@@ -198,19 +212,6 @@ void loop()
   unsigned int hundredths = (currentTimeMillis % 1000) / 10;
   // Format the time string and store it in MISSION_TIME
   sprintf(MISSION_TIME, "%02d:%02d:%02d.%02d", hours, minutes, seconds, hundredths);
-
-  // double check for the BMP390
-  if (!bmp.performReading())
-  {
-    Serial.println("Failed BMP Reading!!!");
-    pixels.setPixelColor(0, pixels.Color(255, 0, 0));
-    pixels.show();
-    return;
-  }
-  // turn led red
-  pixels.setPixelColor(0, pixels.Color(255, 0, 0));
-  pixels.show();
-
   // increment packet count, get altitude [meters] & temp [celsius]
   PACKET_COUNT++;
   long ALTITUDE = bmp.readAltitude(SEALEVELPRESSURE_HPA);
@@ -219,9 +220,93 @@ void loop()
   // print telem to serial
   Serial.println((String)TEAM_ID + ", " + MISSION_TIME + ", " + PACKET_COUNT + ", " + SW_STATE + ", " + CAM_STATE + ", " + ALTITUDE + ", " + TEMP + ", " + ACC_X + ", " + ACC_Y + ", " + ACC_Z + ", " + GYRO_X + ", " + GYRO_Y + ", " + GYRO_Z + ", " + GPS_LAT + ", " + GPS_LONG + ", " + GPS_ALT);
 
-  // clear led with delays causing loop to last 500millisec (1/2 a second)
-  delay(250);
-  pixels.clear();
-  pixels.show();
-  delay(250);
+  switch (SW_STATE)
+  {
+  case STARTUP:
+    // Perform actions for the STARTUP state
+    // double check for the BMP390
+    if (!bmp.performReading())
+    {
+      Serial.println("Failed BMP Reading!!!");
+      pixels.setPixelColor(0, pixels.Color(255, 0, 0));
+      pixels.show();
+      return;
+    }
+    // Transition to the next state when ready
+    if (startupComplete())
+    {
+      SW_STATE = IDLE;
+    }
+    break;
+
+  case IDLE:
+    // Perform actions for the IDLE state
+    // Check for conditions to transition to other states
+    if (liftoffDetected())
+    {
+      SW_STATE = ASCENT;
+    }
+    break;
+
+  case ASCENT:
+    // Perform actions for the ASCENT state
+    // Check for conditions to transition to other states (e.g., anomaly detected)
+    if (rcsGo())
+    {
+      SW_STATE = RCS_GO;
+    }
+    if (anomalyDetected())
+    {
+      SW_STATE = ANOMALY_DETECTED;
+    }
+    break;
+
+  case RCS_GO:
+    // Perform actions for the RCS state
+    // Check for conditions to transition to other states
+    if (rcsLock())
+    {
+      SW_STATE = RCS_LOCK;
+    }
+    if (anomalyDetected())
+    {
+      SW_STATE = ANOMALY_DETECTED;
+    }
+    break;
+
+  case ANOMALY_DETECTED:
+    // Perform actions for the ANOMALY_DETECTED state
+    pixels.setPixelColor(0, pixels.Color(255, 0, 0));
+    pixels.show();
+    // Transition to the recovery state or another appropriate state
+    if (recoverable())
+    {
+      SW_STATE = RECOVERY;
+    }
+    else
+    {
+      SW_STATE = RCS_LOCK; // to rcs lock to just ride the flight out
+    }
+    break;
+
+  case RCS_LOCK:
+    // Perform actions for the RCS_LOCK state
+    pixels.setPixelColor(0, pixels.Color(255, 0, 0));
+    pixels.show();
+    // Transition to shutdown after touchdown
+    if (touchdownComplete())
+    {
+      SW_STATE = SHUTDOWN;
+    }
+    break;
+
+  case RECOVERY:
+    // Perform actions for the RECOVERY state
+    // Transition back to normal flight when recovery is complete
+    if (recoveryComplete())
+    {
+      SW_STATE = SHUTDOWN;
+    }
+    break;
+  }
 }
