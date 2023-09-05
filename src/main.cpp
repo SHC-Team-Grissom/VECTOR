@@ -26,19 +26,43 @@ enum FlightState
   RCS_LOCK,
   ANOMALY_DETECTED,
   RECOVERY,
-  SHUTDOWN
+  SHUTDOWN,
+  ERROR_STATE,
+  NUM_STATES
 };
-
 FlightState SW_STATE = STARTUP;
+// Define colors for each state
+uint32_t stateColors[] = {
+    pixels.Color(255, 0, 0),    // Red for STARTUP
+    pixels.Color(0, 255, 0),    // Green for IDLE
+    pixels.Color(0, 0, 255),    // Blue for ASCENT
+    pixels.Color(255, 255, 0),  // Yellow for RCS_GO
+    pixels.Color(255, 0, 255),  // Magenta for RCS_LOCK
+    pixels.Color(0, 255, 255),  // Cyan for ANOMALY_DETECTED
+    pixels.Color(255, 127, 0),  // Orange for RECOVERY
+    pixels.Color(128, 0, 128),  // Purple for SHUTDOWN
+    pixels.Color(255, 255, 255) // White for ERROR_STATE
+};
+// Define state names
+const char *stateNames[NUM_STATES] = {
+    "STARTUP",
+    "IDLE",
+    "ASCENT",
+    "RCS_GO",
+    "RCS_LOCK",
+    "ANOMALY_DETECTED",
+    "RECOVERY",
+    "SHUTDOWN",
+    "ERROR_STATE"};
 
 // set default vars
 float altitude = 0;
 float pressure = 0;
 
-char TEAM_ID[] = "Grissom";
+char TEAM_ID[] = "GRISSOM";
 char MISSION_TIME[12];
 long PACKET_COUNT = 0;
-char CAM_STATE[] = "Idle";
+char CAM_STATE[] = "IDLE";
 long ACC_X = 0;
 long ACC_Y = 0;
 long ACC_Z = 0;
@@ -169,12 +193,12 @@ void setup()
 
   // Check BMP390 sensor
   Serial.println("BMP390 SENSOR CHECK");
-  pixels.setPixelColor(0, pixels.Color(255, 0, 0));
+  pixels.setPixelColor(0, stateColors[SW_STATE]);
   pixels.show();
   if (!bmp.begin_I2C())
   {
     Serial.println("Could not find a valid sensor. Check connections.");
-    pixels.setPixelColor(0, pixels.Color(255, 0, 0));
+    pixels.setPixelColor(0, pixels.Color(255, 255, 255));
     pixels.show();
     while (1)
       ;
@@ -202,6 +226,24 @@ void setup()
   Serial.println();
 }
 
+bool startupComplete = false;
+bool startupMessagePrinted = false;
+bool idleMessagePrinted = false;
+bool liftoffDetected = false;
+bool ascentMessagePrinted = false;
+bool rcsGo = false;
+bool rcsgoMessagePrinted = false;
+bool rcsLock = false;
+bool rcslockMessagePrinted = false;
+bool anomalyDetected = false;
+bool anomalyMessagePrinted = false;
+bool recoverable = false;
+bool touchdownComplete = false;
+bool recoveryComplete = false;
+bool recoveryMessagePrinted = false;
+bool shutdownMessagePrinted = false;
+
+
 void loop()
 {
   // setting up mission timer
@@ -218,22 +260,34 @@ void loop()
   long TEMP = bmp.temperature;
 
   // print telem to serial
-  Serial.println((String)TEAM_ID + ", " + MISSION_TIME + ", " + PACKET_COUNT + ", " + SW_STATE + ", " + CAM_STATE + ", " + ALTITUDE + ", " + TEMP + ", " + ACC_X + ", " + ACC_Y + ", " + ACC_Z + ", " + GYRO_X + ", " + GYRO_Y + ", " + GYRO_Z + ", " + GPS_LAT + ", " + GPS_LONG + ", " + GPS_ALT);
+  Serial.println((String)TEAM_ID + ", " + MISSION_TIME + ", " + PACKET_COUNT + ", " + stateNames[SW_STATE] + ", " + CAM_STATE + ", " + ALTITUDE + ", " + TEMP + ", " + ACC_X + ", " + ACC_Y + ", " + ACC_Z + ", " + GYRO_X + ", " + GYRO_Y + ", " + GYRO_Z + ", " + GPS_LAT + ", " + GPS_LONG + ", " + GPS_ALT);
 
   switch (SW_STATE)
   {
   case STARTUP:
     // Perform actions for the STARTUP state
+    if (!startupMessagePrinted)
+    {
+      Serial.println("VECTOR ENTERING STARTUP!!!");
+      Serial.println("-------------------------------");
+      Serial.println();
+      startupMessagePrinted = true;
+    }
     // double check for the BMP390
     if (!bmp.performReading())
     {
       Serial.println("Failed BMP Reading!!!");
-      pixels.setPixelColor(0, pixels.Color(255, 0, 0));
+      pixels.setPixelColor(0, pixels.Color(255, 255, 255));
       pixels.show();
       return;
     }
+    pixels.setPixelColor(0, stateColors[SW_STATE]);
+    pixels.show();
+    delay(5000);
+    startupComplete = true;
+
     // Transition to the next state when ready
-    if (startupComplete())
+    if (startupComplete)
     {
       SW_STATE = IDLE;
     }
@@ -241,8 +295,20 @@ void loop()
 
   case IDLE:
     // Perform actions for the IDLE state
+    if (!idleMessagePrinted)
+    {
+      Serial.println("VECTOR ENTERING IDLE!!!");
+      Serial.println("-------------------------------");
+      Serial.println();
+      idleMessagePrinted = true;
+    }
     // Check for conditions to transition to other states
-    if (liftoffDetected())
+    pixels.setPixelColor(0, stateColors[SW_STATE]);
+    pixels.show();
+    delay(5000);
+    liftoffDetected = true;
+
+    if (liftoffDetected)
     {
       SW_STATE = ASCENT;
     }
@@ -250,12 +316,25 @@ void loop()
 
   case ASCENT:
     // Perform actions for the ASCENT state
+    if (!ascentMessagePrinted)
+    {
+      Serial.println("VECTOR ENTERING ASCENT!!!");
+      Serial.println("-------------------------------");
+      Serial.println();
+      ascentMessagePrinted = true;
+    }
     // Check for conditions to transition to other states (e.g., anomaly detected)
-    if (rcsGo())
+    pixels.setPixelColor(0, stateColors[SW_STATE]);
+    pixels.show();
+    delay(5000);
+    rcsGo = true;
+    anomalyDetected = false;
+
+    if (rcsGo)
     {
       SW_STATE = RCS_GO;
     }
-    if (anomalyDetected())
+    if (anomalyDetected)
     {
       SW_STATE = ANOMALY_DETECTED;
     }
@@ -263,12 +342,25 @@ void loop()
 
   case RCS_GO:
     // Perform actions for the RCS state
+    if (!rcsgoMessagePrinted)
+    {
+      Serial.println("VECTOR ENTERING RCS GO!!!");
+      Serial.println("-------------------------------");
+      Serial.println();
+      rcsgoMessagePrinted = true;
+    }
     // Check for conditions to transition to other states
-    if (rcsLock())
+    pixels.setPixelColor(0, stateColors[SW_STATE]);
+    pixels.show();
+    delay(5000);
+    rcsLock = true;
+    anomalyDetected = false;
+
+    if (rcsLock)
     {
       SW_STATE = RCS_LOCK;
     }
-    if (anomalyDetected())
+    if (anomalyDetected)
     {
       SW_STATE = ANOMALY_DETECTED;
     }
@@ -276,10 +368,20 @@ void loop()
 
   case ANOMALY_DETECTED:
     // Perform actions for the ANOMALY_DETECTED state
-    pixels.setPixelColor(0, pixels.Color(255, 0, 0));
-    pixels.show();
+    if (!anomalyMessagePrinted)
+    {
+      Serial.println("VECTOR ENTERING ANOMALY DETECTED!!!");
+      Serial.println("-------------------------------");
+      Serial.println();
+      anomalyMessagePrinted = true;
+    }
     // Transition to the recovery state or another appropriate state
-    if (recoverable())
+    pixels.setPixelColor(0, stateColors[SW_STATE]);
+    pixels.show();
+    delay(5000);
+    recoverable = true;
+
+    if (recoverable)
     {
       SW_STATE = RECOVERY;
     }
@@ -291,10 +393,20 @@ void loop()
 
   case RCS_LOCK:
     // Perform actions for the RCS_LOCK state
-    pixels.setPixelColor(0, pixels.Color(255, 0, 0));
-    pixels.show();
+    if (!rcslockMessagePrinted)
+    {
+      Serial.println("VECTOR ENTERING RCS LOCKOUT!!!");
+      Serial.println("-------------------------------");
+      Serial.println();
+      rcslockMessagePrinted = true;
+    }
     // Transition to shutdown after touchdown
-    if (touchdownComplete())
+    pixels.setPixelColor(0, stateColors[SW_STATE]);
+    pixels.show();
+    delay(5000);
+    touchdownComplete = true;
+
+    if (touchdownComplete)
     {
       SW_STATE = SHUTDOWN;
     }
@@ -302,11 +414,38 @@ void loop()
 
   case RECOVERY:
     // Perform actions for the RECOVERY state
+    if (!recoveryMessagePrinted)
+    {
+      Serial.println("VECTOR ENTERING RECOVERY!!!");
+      Serial.println("-------------------------------");
+      Serial.println();
+      recoveryMessagePrinted = true;
+    }
     // Transition back to normal flight when recovery is complete
-    if (recoveryComplete())
+    pixels.setPixelColor(0, stateColors[SW_STATE]);
+    pixels.show();
+    delay(5000);
+    recoveryComplete = true;
+
+    if (recoveryComplete)
     {
       SW_STATE = SHUTDOWN;
     }
+    break;
+
+  case SHUTDOWN:
+    // Perform actions for the SHUTDOWN state
+    if (!shutdownMessagePrinted)
+    {
+      Serial.println("VECTOR ENTERING SHUTDOWN!!!");
+      Serial.println("-------------------------------");
+      Serial.println();
+      shutdownMessagePrinted = true;
+    }
+    // Transition back to normal flight when recovery is complete
+    pixels.setPixelColor(0, stateColors[SW_STATE]);
+    pixels.show();
+    delay(5000);
     break;
   }
 }
