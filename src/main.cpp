@@ -52,8 +52,8 @@ long GPS_LAT = 0;
 long GPS_LONG = 0;
 long GPS_ALT = 0;
 const int LEDS = 14;
-const int CW_SOLENOID = 11;
-const int CCW_SOLENOID = 12;
+const int CW_SOLENOID = 6;
+const int CCW_SOLENOID = 7;
 long ASCENT_CHECK = 0;
 
 // set software states
@@ -227,11 +227,19 @@ char vectorArt[] =
 
 void setup(void)
 {
-    Serial.begin(115200);
+    //Serial.begin(115200);
+    Serial.begin(9600);
 
-    while (!Serial)
-        delay(10);
-    //delay(10);
+    pinMode(LEDS, OUTPUT);
+    digitalWrite(LEDS, LOW);
+    pinMode(CW_SOLENOID, OUTPUT);
+    digitalWrite(CW_SOLENOID, LOW);
+    pinMode(CCW_SOLENOID, OUTPUT);
+    digitalWrite(CCW_SOLENOID, LOW);
+
+    //while (!Serial)
+    //    delay(10);
+    delay(10);
 
     // Print startup message
     Serial.println("VECTOR FLIGHT COMPUTER STARTUP");
@@ -249,7 +257,6 @@ void setup(void)
 
     // Check LEDs
     Serial.println("LED CHECK");
-    pinMode(LEDS, OUTPUT);
     ledCheck();
     Serial.println("LEDs: OK\n");
 
@@ -301,7 +308,7 @@ void setup(void)
     digitalWrite(CW_SOLENOID, LOW);
     pinMode(CCW_SOLENOID, OUTPUT);
     digitalWrite(CCW_SOLENOID, LOW);
-    delay(500);
+    delay(1000);
     digitalWrite(CW_SOLENOID, HIGH);
     delay(500);
     digitalWrite(CW_SOLENOID, LOW);
@@ -380,6 +387,15 @@ void loop(void)
             pixelOn = !pixelOn;
         }
         delay(250);
+        
+        // delay(1000);
+        // digitalWrite(CW_SOLENOID, HIGH);
+        // delay(1000);
+        // digitalWrite(CW_SOLENOID, LOW);
+        // delay(1000);
+        // digitalWrite(CCW_SOLENOID, HIGH);
+        // delay(1000);
+        // digitalWrite(CCW_SOLENOID, LOW);
 
         // Transition to the IDLE once calibrated
         if (SIV > 3)
@@ -408,14 +424,7 @@ void loop(void)
             }
             pixelOn = !pixelOn;
         }
-        delay(5000);
-        digitalWrite(CW_SOLENOID, HIGH);
-        delay(500);
-        digitalWrite(CW_SOLENOID, LOW);
-        delay(1000);
-        digitalWrite(CCW_SOLENOID, HIGH);
-        delay(500);
-        digitalWrite(CCW_SOLENOID, LOW);
+        delay(250);
 
         // Transition to the ASCENT once calibrated
         if (ACC_Z > 3)
